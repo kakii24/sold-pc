@@ -1,0 +1,54 @@
+{
+  "name": "gestwo",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build && electron-builder",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "build:dir": "tsc && vite build && electron-builder --dir"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "autoprefixer": "^10.6.1",
+    "concurrently": "^10.0.5",
+    "cross-env": "^10.1.0",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "oxlint": "^1.81.0",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0",
+    "vite-plugin-electron": "^1.1.2",
+    "vite-plugin-electron-renderer": "^1.0.0"
+  },
+  "main": "dist-electron/main.js",
+  "build": {
+    "appId": "com.gestwo.app",
+    "productName": "GestionStock",
+    "directories": {
+      "output": "dist-app"
+    },
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "win": {
+      "target": "dir"
+    },
+    "npmRebuild": false
+  }
+}
