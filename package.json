@@ -1,7 +1,10 @@
 {
-  "name": "gestwo",
+  "name": "gestionstock",
+  "productName": "GestionStock",
+  "version": "1.0.0",
+  "description": "Logiciel de Point de Vente et Gestion de Stock (Gros & Détail)",
+  "author": "GestionStock",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -38,7 +41,7 @@
   },
   "main": "dist-electron/main.js",
   "build": {
-    "appId": "com.gestwo.app",
+    "appId": "com.gestionstock.app",
     "productName": "GestionStock",
     "directories": {
       "output": "dist-app"
@@ -46,8 +49,39 @@
     "asarUnpack": [
       "**/*.node"
     ],
+    "extraFiles": [
+      {
+        "from": "build-resources/dlls",
+        "to": ".",
+        "filter": [
+          "*.dll"
+        ]
+      }
+    ],
     "win": {
-      "target": "dir"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "GestionStock PRO",
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "runAfterFinish": true
     },
     "npmRebuild": false
   }
