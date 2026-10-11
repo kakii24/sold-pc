@@ -3,21 +3,57 @@ import { WholesaleView } from './WholesaleView';
 import { RetailView } from './RetailView';
 import { StockView } from './StockView';
 import { ClientsView } from './ClientsView';
+import { ActivationLockScreen } from './ActivationLockScreen';
 import { useAppStore } from './store';
 
 function App() {
   const [activeView, setActiveView] = useState<'wholesale' | 'retail' | 'stock' | 'clients'>('wholesale');
+  const [licenseChecking, setLicenseChecking] = useState<boolean>(true);
+  const [isActivated, setIsActivated] = useState<boolean>(false);
+  const [machineId, setMachineId] = useState<string>('');
+
   const { products, clients, fetchProducts, fetchClients } = useAppStore();
 
   useEffect(() => {
-    fetchProducts();
-    fetchClients();
-  }, [fetchProducts, fetchClients]);
+    let mounted = true;
+    const verifyLicense = async () => {
+      try {
+        // @ts-ignore
+        if (window.api?.getLicenseStatus) {
+          // @ts-ignore
+          const status = await window.api.getLicenseStatus();
+          if (mounted) {
+            setMachineId(status?.machineId || '');
+            setIsActivated(Boolean(status?.activated));
+          }
+        }
+      } catch (err) {
+        console.error('License verification error:', err);
+      } finally {
+        if (mounted) {
+          setLicenseChecking(false);
+        }
+      }
+    };
+    verifyLicense();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isActivated) {
+      fetchProducts();
+      fetchClients();
+    }
+  }, [isActivated, fetchProducts, fetchClients]);
 
   const lowStockCount = products.filter(p => p.stock_actuel <= p.seuil_alerte).length;
   const indebtedClientsCount = clients.filter(c => c.total_dette > 0).length;
 
   useEffect(() => {
+    if (!isActivated) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F1') {
         e.preventDefault();
@@ -35,7 +71,27 @@ function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [isActivated]);
+
+  if (licenseChecking) {
+    return (
+      <div className="w-screen h-screen bg-gray-950 text-white flex flex-col items-center justify-center select-none">
+        <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
+        <p className="text-xs font-mono text-gray-400 uppercase tracking-widest">
+          Vérification de la licence matérielle...
+        </p>
+      </div>
+    );
+  }
+
+  if (!isActivated) {
+    return (
+      <ActivationLockScreen
+        machineId={machineId}
+        onActivated={() => setIsActivated(true)}
+      />
+    );
+  }
 
   return (
     <div className="w-screen h-screen overflow-hidden bg-gray-100 font-sans flex flex-col">
