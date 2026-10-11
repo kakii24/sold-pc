@@ -53,6 +53,9 @@ export const WholesaleView = () => {
   // Focus management & hotkeys
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Do not intercept keys when a modal is open
+      if (receiptModalOpen || isClientModalOpen) return;
+
       if (e.key === 'Insert') {
         e.preventDefault();
         setIsClientModalOpen(true);
@@ -190,8 +193,9 @@ export const WholesaleView = () => {
 
   // Calculations for Sale Mode
   const detteGeneree = Math.max(0, totalCommande - montantVerse);
-  const ancienCredit = selectedClient?.total_dette || 0;
-  const nouveauSoldeVente = ancienCredit + detteGeneree;
+  const ancienCredit = Number(selectedClient?.total_dette) || 0;
+  const nouveauSoldeTotal = ancienCredit + detteGeneree;
+  const nouveauSoldeVente = nouveauSoldeTotal;
   const aRendreVente = Math.max(0, montantVerse - totalCommande);
 
   // Calculations for Debt Payment Mode
@@ -221,6 +225,15 @@ export const WholesaleView = () => {
         detteGeneree
       });
 
+      if (res && res.success === false) {
+        showToast("Erreur lors de la vente: " + (res.error || "Échec de la transaction."));
+        return;
+      }
+
+      const finalAncienCredit = res?.ancienCredit ?? ancienCredit;
+      const finalDetteGeneree = res?.detteGeneree ?? detteGeneree;
+      const finalNouveauSolde = res?.nouveauSoldeTotal ?? nouveauSoldeTotal;
+
       const receipt: ReceiptData = {
         saleId: res?.saleId || 1,
         type_vente: 'GROS',
@@ -233,19 +246,21 @@ export const WholesaleView = () => {
         })),
         total_ht: totalCommande,
         montant_verse: montantVerse,
+        monnaie_rendue: aRendreVente,
         client: {
           nom: selectedClient.nom,
           nom_magasin: selectedClient.nom_magasin,
           telephone: selectedClient.telephone,
           adresse: selectedClient.adresse,
         },
-        ancien_credit: ancienCredit,
-        dette_vente: detteGeneree,
-        nouveau_solde: nouveauSoldeTotal,
+        ancien_credit: finalAncienCredit,
+        dette_vente: finalDetteGeneree,
+        nouveau_solde: finalNouveauSolde,
         date: new Date().toISOString(),
       };
 
       setLastReceiptData(receipt);
+      setCurrentReceiptData(receipt);
       showToast("Vente en gros validée avec succès !");
 
       const autoPrint = localStorage.getItem('pos_auto_print') === 'true';
@@ -256,25 +271,26 @@ export const WholesaleView = () => {
           window.api.printReceipt({ silent: true }).catch(() => {});
         }
       } else {
-        setCurrentReceiptData(receipt);
         setReceiptModalOpen(true);
       }
 
       clearCart();
       setClientQuery('');
-      fetchProducts();
-      fetchClients();
+      await fetchProducts();
+      await fetchClients();
     } catch (err: any) {
-      showToast("Erreur lors de la vente: " + err.message);
+      showToast("Erreur lors de la vente: " + (err?.message || err));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Preview ticket manually (always opens modal with safe fallbacks)
+  // Preview ticket manually (always opens modal with safe fallbacks before or after sale)
   const handlePreviewTicket = () => {
     try {
-      const itemsToUse = cart.length > 0 
+      const hasActiveCart = cart.length > 0;
+
+      const itemsToUse = hasActiveCart
         ? cart.map(item => ({
             nom: item.nom || 'Article',
             code_barre: item.code_barre || '',
@@ -284,30 +300,41 @@ export const WholesaleView = () => {
           }))
         : (lastReceiptData?.items || []);
 
-      const totalHt = cart.length > 0 
-        ? totalCommande 
+      const totalHt = hasActiveCart
+        ? totalCommande
         : (lastReceiptData?.total_ht || 0);
 
-      const vers = cart.length > 0 
-        ? montantVerse 
+      const vers = hasActiveCart
+        ? montantVerse
         : (lastReceiptData?.montant_verse || 0);
 
+      const monnaie = hasActiveCart
+        ? aRendreVente
+        : (lastReceiptData?.monnaie_rendue || 0);
+
       const previewData: ReceiptData = {
-        saleId: lastReceiptData ? lastReceiptData.saleId : 1,
+        saleId: (!hasActiveCart && lastReceiptData?.saleId) ? lastReceiptData.saleId : 1,
         type_vente: 'GROS',
         items: itemsToUse,
         total_ht: totalHt,
         montant_verse: vers,
+        monnaie_rendue: monnaie,
         client: selectedClient ? {
           nom: selectedClient.nom || '',
           nom_magasin: selectedClient.nom_magasin || '',
           telephone: selectedClient.telephone || '',
           adresse: selectedClient.adresse || '',
         } : (lastReceiptData?.client || undefined),
-        ancien_credit: selectedClient ? ancienCredit : (lastReceiptData?.ancien_credit || 0),
-        dette_vente: selectedClient ? detteGeneree : (lastReceiptData?.dette_vente || 0),
-        nouveau_solde: selectedClient ? nouveauSoldeTotal : (lastReceiptData?.nouveau_solde || 0),
-        date: new Date().toISOString(),
+        ancien_credit: hasActiveCart
+          ? ancienCredit
+          : (lastReceiptData?.ancien_credit ?? ancienCredit),
+        dette_vente: hasActiveCart
+          ? detteGeneree
+          : (lastReceiptData?.dette_vente ?? 0),
+        nouveau_solde: hasActiveCart
+          ? nouveauSoldeTotal
+          : (lastReceiptData?.nouveau_solde ?? ancienCredit),
+        date: (!hasActiveCart && lastReceiptData?.date) ? lastReceiptData.date : new Date().toISOString(),
       };
 
       setCurrentReceiptData(previewData);
@@ -829,14 +856,25 @@ export const WholesaleView = () => {
               </div>
             </div>
 
-            {/* Confirm Debt Payment Button */}
-            <button 
-              disabled={montantVerse <= 0 || isSubmitting}
-              className="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-black py-2.5 rounded-lg shadow-lg text-sm tracking-wide transition-all focus:ring-4 focus:ring-purple-800 cursor-pointer"
-              onClick={handleDebtPayment}
-            >
-              {isSubmitting ? 'ENREGISTREMENT...' : 'ENREGISTRER VERSEMENT (F12)'}
-            </button>
+            {/* Confirm Debt Payment & Receipt Preview Buttons */}
+            <div className="space-y-1.5">
+              <button 
+                disabled={montantVerse <= 0 || isSubmitting}
+                className="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-black py-2.5 rounded-lg shadow-lg text-sm tracking-wide transition-all focus:ring-4 focus:ring-purple-800 cursor-pointer"
+                onClick={handleDebtPayment}
+              >
+                {isSubmitting ? 'ENREGISTREMENT...' : 'ENREGISTRER VERSEMENT (F12)'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePreviewTicket}
+                className="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white font-bold py-1.5 rounded-lg border border-gray-700 transition-colors flex items-center justify-center gap-1.5 text-xs cursor-pointer"
+              >
+                <span>🧾</span>
+                <span>Aperçu / Imprimer Ticket</span>
+              </button>
+            </div>
           </div>
         ) : (
           /* Mode 2: STANDARD WHOLESALE SALE FLOW (Cart has items or empty cart without debt) */
