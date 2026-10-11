@@ -2,11 +2,25 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { initDB, db } from './database';
+import {
+  checkLicenseOnStartup,
+  activateLicense,
+  getMachineId,
+  isLicenseActivated,
+} from './license';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
+let dbInitialized = false;
+
+function ensureDatabaseInitialized() {
+  if (!dbInitialized) {
+    initDB();
+    dbInitialized = true;
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -31,7 +45,10 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  initDB();
+  const { activated } = checkLicenseOnStartup();
+  if (activated) {
+    ensureDatabaseInitialized();
+  }
   createWindow();
 
   app.on('activate', () => {
@@ -47,8 +64,30 @@ app.on('window-all-closed', () => {
   }
 });
 
-// IPC Database Handlers
+// License IPC Handlers
+ipcMain.handle('license:status', () => {
+  const status = checkLicenseOnStartup();
+  if (status.activated) {
+    ensureDatabaseInitialized();
+  }
+  return status;
+});
+
+ipcMain.handle('license:get-machine-id', () => {
+  return getMachineId();
+});
+
+ipcMain.handle('license:activate', (_, key: string) => {
+  const result = activateLicense(key);
+  if (result.success) {
+    ensureDatabaseInitialized();
+  }
+  return result;
+});
+
+// IPC Database Handlers (Guarded by License Activation)
 ipcMain.handle('get-clients', () => {
+  if (!isLicenseActivated()) return [];
   try {
     return db.prepare('SELECT * FROM clients ORDER BY id DESC').all();
   } catch (err: any) {
@@ -58,6 +97,7 @@ ipcMain.handle('get-clients', () => {
 });
 
 ipcMain.handle('clients:search', (_, query) => {
+  if (!isLicenseActivated()) return [];
   try {
     const searchTerm = `%${query}%`;
     return db.prepare('SELECT id, nom, nom_magasin, telephone, total_dette FROM clients WHERE nom LIKE ? OR nom_magasin LIKE ? OR telephone LIKE ? LIMIT 50').all(searchTerm, searchTerm, searchTerm);
@@ -68,6 +108,7 @@ ipcMain.handle('clients:search', (_, query) => {
 });
 
 ipcMain.handle('clients:create', async (_, clientData) => {
+  if (!isLicenseActivated()) return { success: false, error: 'Logiciel non activé.' };
   try {
     const stmt = db.prepare(`
       INSERT INTO clients (nom, nom_magasin, telephone, adresse, total_dette)
@@ -88,6 +129,7 @@ ipcMain.handle('clients:create', async (_, clientData) => {
 });
 
 ipcMain.handle('clients:update', async (_, client) => {
+  if (!isLicenseActivated()) return { success: false, error: 'Logiciel non activé.' };
   try {
     const stmt = db.prepare(`
       UPDATE clients 
@@ -110,6 +152,7 @@ ipcMain.handle('clients:update', async (_, client) => {
 });
 
 ipcMain.handle('clients:get-sales', (_, clientId) => {
+  if (!isLicenseActivated()) return [];
   try {
     const sales = db.prepare(`
       SELECT s.*, 
@@ -126,6 +169,7 @@ ipcMain.handle('clients:get-sales', (_, clientId) => {
 });
 
 ipcMain.handle('sales:get-details', (_, saleId) => {
+  if (!isLicenseActivated()) return { sale: null, items: [] };
   try {
     const sale = db.prepare('SELECT * FROM sales WHERE id = ?').get(saleId);
     const items = db.prepare(`
@@ -143,6 +187,7 @@ ipcMain.handle('sales:get-details', (_, saleId) => {
 });
 
 ipcMain.handle('clients:get-ledger', (_, clientId) => {
+  if (!isLicenseActivated()) return [];
   try {
     const entries = db.prepare(`
       SELECT l.*, s.total_ht as sale_total
@@ -159,6 +204,7 @@ ipcMain.handle('clients:get-ledger', (_, clientId) => {
 });
 
 ipcMain.handle('clients:pay-debt', async (_, { clientId, montant }) => {
+  if (!isLicenseActivated()) return { success: false, error: 'Logiciel non activé.' };
   try {
     const transaction = db.transaction(() => {
       const client = db.prepare('SELECT id, nom, nom_magasin, total_dette FROM clients WHERE id = ?').get(clientId) as any;
@@ -207,19 +253,23 @@ ipcMain.handle('clients:pay-debt', async (_, { clientId, montant }) => {
 });
 
 ipcMain.handle('get-products', () => {
+  if (!isLicenseActivated()) return [];
   return db.prepare('SELECT * FROM products ORDER BY id DESC').all();
 });
 
 ipcMain.handle('products:search', (_, query) => {
+  if (!isLicenseActivated()) return [];
   const searchTerm = `%${query}%`;
   return db.prepare('SELECT * FROM products WHERE nom LIKE ? OR code_barre = ? ORDER BY id DESC LIMIT 50').all(searchTerm, query);
 });
 
 ipcMain.handle('products:by-barcode', (_, code_barre) => {
+  if (!isLicenseActivated()) return null;
   return db.prepare('SELECT * FROM products WHERE code_barre = ?').get(code_barre);
 });
 
 ipcMain.handle('products:create', (_, product) => {
+  if (!isLicenseActivated()) throw new Error('Logiciel non activé.');
   const stmt = db.prepare(`
     INSERT INTO products (code_barre, nom, stock_actuel, seuil_alerte, prix_achat, prix_gros, prix_detail)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -237,6 +287,7 @@ ipcMain.handle('products:create', (_, product) => {
 });
 
 ipcMain.handle('products:update', (_, product) => {
+  if (!isLicenseActivated()) throw new Error('Logiciel non activé.');
   const stmt = db.prepare(`
     UPDATE products 
     SET code_barre = ?, nom = ?, stock_actuel = ?, seuil_alerte = ?, prix_achat = ?, prix_gros = ?, prix_detail = ?, updated_at = CURRENT_TIMESTAMP
@@ -256,18 +307,21 @@ ipcMain.handle('products:update', (_, product) => {
 });
 
 ipcMain.handle('products:delete', (_, id) => {
+  if (!isLicenseActivated()) throw new Error('Logiciel non activé.');
   const stmt = db.prepare('DELETE FROM products WHERE id = ?');
   stmt.run(id);
   return { success: true };
 });
 
 ipcMain.handle('products:adjust-stock', (_, { id, delta }) => {
+  if (!isLicenseActivated()) throw new Error('Logiciel non activé.');
   const stmt = db.prepare('UPDATE products SET stock_actuel = MAX(0, stock_actuel + ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?');
   stmt.run(Number(delta), id);
   return db.prepare('SELECT * FROM products WHERE id = ?').get(id);
 });
 
 ipcMain.handle('products:seed', () => {
+  if (!isLicenseActivated()) return { seeded: false, count: 0 };
   const count = db.prepare('SELECT count(*) as count FROM products').get() as { count: number };
   if (count.count > 0) return { seeded: false, count: count.count };
 
@@ -305,50 +359,75 @@ ipcMain.handle('products:seed', () => {
 });
 
 ipcMain.handle('sales:create-wholesale', (_, payload) => {
-  const { clientId, items, totalHt, montantVerse, detteGeneree } = payload;
-  
-  const transaction = db.transaction(() => {
-    // 1. Insert into sales
-    const saleStmt = db.prepare(`
-      INSERT INTO sales (type_vente, client_id, total_ht, montant_verse, dette_generee) 
-      VALUES ('GROS', ?, ?, ?, ?)
-    `);
-    const saleInfo = saleStmt.run(clientId, totalHt, montantVerse, detteGeneree);
-    const saleId = saleInfo.lastInsertRowid;
+  if (!isLicenseActivated()) return { success: false, error: 'Logiciel non activé.' };
+  try {
+    const { clientId, items, totalHt, montantVerse } = payload;
+    const totalBon = Number(totalHt) || 0;
+    const verse = Number(montantVerse) || 0;
+    const detteVente = Math.max(0, totalBon - verse);
 
-    // 2. Insert items and update stock
-    const itemStmt = db.prepare(`
-      INSERT INTO sale_items (sale_id, product_id, quantite, prix_achat_unitaire, prix_vente_unitaire, total_ligne)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    const stockStmt = db.prepare('UPDATE products SET stock_actuel = stock_actuel - ? WHERE id = ?');
+    const transaction = db.transaction(() => {
+      const existingClient = db.prepare('SELECT * FROM clients WHERE id = ?').get(clientId) as any;
+      if (!existingClient) {
+        throw new Error('Client introuvable.');
+      }
 
-    for (const item of items) {
-      itemStmt.run(saleId, item.productId, item.quantite, item.prix_achat, item.prix_vente, item.total_ligne);
-      stockStmt.run(item.quantite, item.productId);
-    }
+      const ancienCredit = Number(existingClient.total_dette) || 0;
+      const nouveauSoldeTotal = ancienCredit + detteVente;
 
-    // 3. Update debt if needed
-    if (detteGeneree > 0) {
-      const clientUpdateStmt = db.prepare('UPDATE clients SET total_dette = total_dette + ? WHERE id = ?');
-      clientUpdateStmt.run(detteGeneree, clientId);
-      
-      const currentClient = db.prepare('SELECT total_dette FROM clients WHERE id = ?').get(clientId) as any;
-      
-      const ledgerStmt = db.prepare(`
-        INSERT INTO client_debt_ledger (client_id, sale_id, type_operation, montant, solde_apres)
-        VALUES (?, ?, 'VENTE_CREDIT', ?, ?)
+      // 1. Insert into sales
+      const saleStmt = db.prepare(`
+        INSERT INTO sales (type_vente, client_id, total_ht, montant_verse, dette_generee) 
+        VALUES ('GROS', ?, ?, ?, ?)
       `);
-      ledgerStmt.run(clientId, saleId, detteGeneree, currentClient.total_dette);
-    }
-    
-    return { success: true, saleId };
-  });
+      const saleInfo = saleStmt.run(clientId, totalBon, verse, detteVente);
+      const saleId = Number(saleInfo.lastInsertRowid);
 
-  return transaction();
+      // 2. Insert items and update stock
+      const itemStmt = db.prepare(`
+        INSERT INTO sale_items (sale_id, product_id, quantite, prix_achat_unitaire, prix_vente_unitaire, total_ligne)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      const stockStmt = db.prepare('UPDATE products SET stock_actuel = MAX(0, stock_actuel - ?) WHERE id = ?');
+
+      for (const item of items) {
+        itemStmt.run(saleId, item.productId, item.quantite, item.prix_achat, item.prix_vente, item.total_ligne);
+        stockStmt.run(item.quantite, item.productId);
+      }
+
+      // 3. Update debt if needed
+      if (detteVente > 0) {
+        const clientUpdateStmt = db.prepare('UPDATE clients SET total_dette = ? WHERE id = ?');
+        clientUpdateStmt.run(nouveauSoldeTotal, clientId);
+        
+        const ledgerStmt = db.prepare(`
+          INSERT INTO client_debt_ledger (client_id, sale_id, type_operation, montant, solde_apres)
+          VALUES (?, ?, 'VENTE_CREDIT', ?, ?)
+        `);
+        ledgerStmt.run(clientId, saleId, detteVente, nouveauSoldeTotal);
+      }
+
+      const updatedClient = db.prepare('SELECT * FROM clients WHERE id = ?').get(clientId);
+      
+      return {
+        success: true,
+        saleId,
+        ancienCredit,
+        detteGeneree: detteVente,
+        nouveauSoldeTotal,
+        client: updatedClient,
+      };
+    });
+
+    return transaction();
+  } catch (err: any) {
+    console.error('Failed to create wholesale sale:', err);
+    return { success: false, error: err.message };
+  }
 });
 
 ipcMain.handle('sales:create-retail', (_, payload) => {
+  if (!isLicenseActivated()) return { success: false, error: 'Logiciel non activé.' };
   try {
     const { items, totalHt, montantVerse } = payload;
     
