@@ -23,8 +23,14 @@ const api = {
   createRetailSale: (payload: any) => ipcRenderer.invoke('sales:create-retail', payload),
   printReceipt: (options?: { silent?: boolean; printerName?: string }) => ipcRenderer.invoke('print:receipt', options),
   getPrinters: () => ipcRenderer.invoke('print:get-printers'),
+
+  // Hardware Node-Locked Licensing API
+  getLicenseStatus: () => ipcRenderer.invoke('license:status'),
+  getMachineId: () => ipcRenderer.invoke('license:get-machine-id'),
+  activateLicense: (key: string) => ipcRenderer.invoke('license:activate', key),
 };
 
 contextBridge.exposeInMainWorld('api', api);
 
 export type ElectronAPI = typeof api;
+
