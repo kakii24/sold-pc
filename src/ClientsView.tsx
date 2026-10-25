@@ -72,6 +72,9 @@ export const ClientsView: React.FC = () => {
     nom_magasin: '',
     telephone: '',
     adresse: '',
+    nif: '',
+    nis: '',
+    registre_numero: '',
   });
 
   // Edit Client Form
@@ -80,6 +83,9 @@ export const ClientsView: React.FC = () => {
     nom_magasin: '',
     telephone: '',
     adresse: '',
+    nif: '',
+    nis: '',
+    registre_numero: '',
   });
 
   // Toast Notifications
@@ -129,7 +135,10 @@ export const ClientsView: React.FC = () => {
         c.nom.toLowerCase().includes(q) ||
         c.nom_magasin.toLowerCase().includes(q) ||
         (c.telephone && c.telephone.toLowerCase().includes(q)) ||
-        (c.adresse && c.adresse.toLowerCase().includes(q));
+        (c.adresse && c.adresse.toLowerCase().includes(q)) ||
+        (c.nif && c.nif.toLowerCase().includes(q)) ||
+        (c.nis && c.nis.toLowerCase().includes(q)) ||
+        (c.registre_numero && c.registre_numero.toLowerCase().includes(q));
 
       if (!matchesSearch) return false;
 
@@ -206,9 +215,12 @@ export const ClientsView: React.FC = () => {
         nom_magasin: newClientData.nom_magasin.trim(),
         telephone: newClientData.telephone.trim(),
         adresse: newClientData.adresse.trim(),
+        nif: newClientData.nif.trim(),
+        nis: newClientData.nis.trim(),
+        registre_numero: newClientData.registre_numero.trim(),
       });
       setIsNewClientModalOpen(false);
-      setNewClientData({ nom: '', nom_magasin: '', telephone: '', adresse: '' });
+      setNewClientData({ nom: '', nom_magasin: '', telephone: '', adresse: '', nif: '', nis: '', registre_numero: '' });
       showToast(`Client "${created.nom}" enregistré avec succès.`);
     } catch (err: any) {
       showToast(`Erreur création client: ${err.message || 'Échec'}`);
@@ -223,6 +235,9 @@ export const ClientsView: React.FC = () => {
       nom_magasin: client.nom_magasin,
       telephone: client.telephone || '',
       adresse: client.adresse || '',
+      nif: client.nif || '',
+      nis: client.nis || '',
+      registre_numero: client.registre_numero || '',
     });
   };
 
@@ -242,6 +257,9 @@ export const ClientsView: React.FC = () => {
         nom_magasin: editClientData.nom_magasin.trim(),
         telephone: editClientData.telephone.trim(),
         adresse: editClientData.adresse.trim(),
+        nif: editClientData.nif.trim(),
+        nis: editClientData.nis.trim(),
+        registre_numero: editClientData.registre_numero.trim(),
       });
       setEditingClient(null);
       if (selectedClientForProfile && selectedClientForProfile.id === updated.id) {
@@ -496,17 +514,19 @@ export const ClientsView: React.FC = () => {
               <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 text-[11px] font-bold text-slate-500 uppercase tracking-wider select-none">
                 <tr>
                   <th className="py-2 px-3">Client & Établissement</th>
+                  <th className="py-2 px-3">N° Registre (RC)</th>
+                  <th className="py-2 px-3">NIF</th>
+                  <th className="py-2 px-3">NIS</th>
                   <th className="py-2 px-3">Téléphone</th>
                   <th className="py-2 px-3">Adresse</th>
                   <th className="py-2 px-3 text-right">Solde Dette</th>
-                  <th className="py-2 px-3 text-center">Inscription</th>
                   <th className="py-2 px-3 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredClients.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-slate-400">
+                    <td colSpan={8} className="py-12 text-center text-slate-400">
                       <div className="max-w-sm mx-auto flex flex-col items-center">
                         <span className="text-3xl mb-2">🔍</span>
                         <p className="font-bold text-slate-700 text-xs">Aucun client trouvé</p>
@@ -558,8 +578,41 @@ export const ClientsView: React.FC = () => {
                           </div>
                         </td>
 
+                        {/* N° Registre */}
+                        <td className="py-1.5 px-3 font-mono text-[11px] whitespace-nowrap">
+                          {client.registre_numero ? (
+                            <span className="inline-flex items-center gap-1 text-slate-800 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded font-semibold">
+                              <span>📋</span> {client.registre_numero}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300 italic text-[11px]">—</span>
+                          )}
+                        </td>
+
+                        {/* NIF */}
+                        <td className="py-1.5 px-3 font-mono text-[11px] whitespace-nowrap">
+                          {client.nif ? (
+                            <span className="inline-flex items-center gap-1 text-blue-800 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded font-semibold">
+                              <span>🏛️</span> {client.nif}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300 italic text-[11px]">—</span>
+                          )}
+                        </td>
+
+                        {/* NIS */}
+                        <td className="py-1.5 px-3 font-mono text-[11px] whitespace-nowrap">
+                          {client.nis ? (
+                            <span className="inline-flex items-center gap-1 text-purple-800 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded font-semibold">
+                              <span>📊</span> {client.nis}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300 italic text-[11px]">—</span>
+                          )}
+                        </td>
+
                         {/* Telephone */}
-                        <td className="py-1.5 px-3 font-mono text-[11px]">
+                        <td className="py-1.5 px-3 font-mono text-[11px] whitespace-nowrap">
                           {client.telephone ? (
                             <span className="inline-flex items-center gap-1 text-slate-700 bg-slate-100 px-1.5 py-0.2 rounded">
                               <span>📞</span> {client.telephone}
@@ -601,11 +654,6 @@ export const ClientsView: React.FC = () => {
                               </span>
                             </div>
                           )}
-                        </td>
-
-                        {/* Inscription Date */}
-                        <td className="py-1.5 px-3 text-center font-mono text-[11px] text-slate-500">
-                          {formatDate(client.created_at)}
                         </td>
 
                         {/* Actions */}
@@ -691,6 +739,21 @@ export const ClientsView: React.FC = () => {
                     {selectedClientForProfile.adresse && (
                       <span className="flex items-center gap-1">
                         <span>📍</span> {selectedClientForProfile.adresse}
+                      </span>
+                    )}
+                    {selectedClientForProfile.registre_numero && (
+                      <span className="flex items-center gap-1 font-mono bg-slate-800 px-2 py-0.5 rounded border border-slate-700 text-slate-300">
+                        <span>📋 RC :</span> <strong className="text-white">{selectedClientForProfile.registre_numero}</strong>
+                      </span>
+                    )}
+                    {selectedClientForProfile.nif && (
+                      <span className="flex items-center gap-1 font-mono bg-slate-800 px-2 py-0.5 rounded border border-slate-700 text-slate-300">
+                        <span>🏛️ NIF :</span> <strong className="text-white">{selectedClientForProfile.nif}</strong>
+                      </span>
+                    )}
+                    {selectedClientForProfile.nis && (
+                      <span className="flex items-center gap-1 font-mono bg-slate-800 px-2 py-0.5 rounded border border-slate-700 text-slate-300">
+                        <span>📊 NIS :</span> <strong className="text-white">{selectedClientForProfile.nis}</strong>
                       </span>
                     )}
                     <span className="flex items-center gap-1 font-mono">
@@ -1303,6 +1366,47 @@ export const ClientsView: React.FC = () => {
                 />
               </div>
 
+              <div className="grid grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1">
+                    N° Registre (RC)
+                  </label>
+                  <input
+                    type="text"
+                    value={newClientData.registre_numero}
+                    onChange={(e) => setNewClientData({ ...newClientData, registre_numero: e.target.value })}
+                    placeholder="16/00-1234567B"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white rounded-xl text-xs font-mono font-semibold text-slate-900 focus:outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1">
+                    NIF
+                  </label>
+                  <input
+                    type="text"
+                    value={newClientData.nif}
+                    onChange={(e) => setNewClientData({ ...newClientData, nif: e.target.value })}
+                    placeholder="000116001234567"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white rounded-xl text-xs font-mono font-semibold text-slate-900 focus:outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1">
+                    NIS
+                  </label>
+                  <input
+                    type="text"
+                    value={newClientData.nis}
+                    onChange={(e) => setNewClientData({ ...newClientData, nis: e.target.value })}
+                    placeholder="0999160100123"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white rounded-xl text-xs font-mono font-semibold text-slate-900 focus:outline-none transition-all"
+                  />
+                </div>
+              </div>
+
               <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-200">
                 <button
                   type="button"
@@ -1399,6 +1503,47 @@ export const ClientsView: React.FC = () => {
                   placeholder="Ex: Kouba, Alger"
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white rounded-xl text-sm font-semibold text-slate-900 focus:outline-none transition-all"
                 />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1">
+                    N° Registre (RC)
+                  </label>
+                  <input
+                    type="text"
+                    value={editClientData.registre_numero}
+                    onChange={(e) => setEditClientData({ ...editClientData, registre_numero: e.target.value })}
+                    placeholder="16/00-1234567B"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white rounded-xl text-xs font-mono font-semibold text-slate-900 focus:outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1">
+                    NIF
+                  </label>
+                  <input
+                    type="text"
+                    value={editClientData.nif}
+                    onChange={(e) => setEditClientData({ ...editClientData, nif: e.target.value })}
+                    placeholder="000116001234567"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white rounded-xl text-xs font-mono font-semibold text-slate-900 focus:outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1">
+                    NIS
+                  </label>
+                  <input
+                    type="text"
+                    value={editClientData.nis}
+                    onChange={(e) => setEditClientData({ ...editClientData, nis: e.target.value })}
+                    placeholder="0999160100123"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white rounded-xl text-xs font-mono font-semibold text-slate-900 focus:outline-none transition-all"
+                  />
+                </div>
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-200">

@@ -39,6 +39,9 @@ export function initDB() {
         nom_magasin TEXT NOT NULL,
         telephone TEXT,
         adresse TEXT,
+        nif TEXT,
+        nis TEXT,
+        registre_numero TEXT,
         total_dette REAL DEFAULT 0.0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -53,6 +56,7 @@ export function initDB() {
         prix_achat REAL NOT NULL,
         prix_gros REAL NOT NULL,
         prix_detail REAL NOT NULL,
+        date_expiration TEXT,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(code_barre);
@@ -89,18 +93,98 @@ export function initDB() {
         solde_apres REAL NOT NULL,
         date_operation DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- Suppliers (Fournisseurs)
+    CREATE TABLE IF NOT EXISTS suppliers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nom TEXT NOT NULL,
+        nom_societe TEXT,
+        telephone TEXT,
+        adresse TEXT,
+        total_dette REAL DEFAULT 0.0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Supplier Invoices / Supply Orders (Factures & Réapprovisionnements)
+    CREATE TABLE IF NOT EXISTS supplier_invoices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        supplier_id INTEGER NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
+        reference_facture TEXT,
+        description TEXT,
+        montant_total REAL NOT NULL,
+        montant_paye REAL NOT NULL,
+        dette_generee REAL DEFAULT 0.0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Supplier Debt & Operations Ledger
+    CREATE TABLE IF NOT EXISTS supplier_ledger (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        supplier_id INTEGER NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
+        invoice_id INTEGER REFERENCES supplier_invoices(id) ON DELETE SET NULL,
+        type_operation TEXT CHECK(type_operation IN ('FACTURE_ACHAT', 'REGLEMENT_FOURNISSEUR')) NOT NULL,
+        montant REAL NOT NULL,
+        solde_apres REAL NOT NULL,
+        description TEXT,
+        date_operation DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Products supplied/bought from each supplier
+    CREATE TABLE IF NOT EXISTS supplier_products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        supplier_id INTEGER NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
+        nom TEXT NOT NULL,
+        reference TEXT,
+        prix_achat REAL NOT NULL,
+        categorie TEXT,
+        notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_supplier_products_supplier ON supplier_products(supplier_id);
+
+    -- Charges (Business Operating Expenses: Rent, Fuel, Packaging, Utilities, Salaries, etc.)
+    CREATE TABLE IF NOT EXISTS charges (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        titre TEXT NOT NULL,
+        montant REAL NOT NULL,
+        categorie TEXT DEFAULT 'Autre',
+        notes TEXT,
+        date_charge DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_charges_date ON charges(date_charge);
   `);
 
-  // Safe migration: check if telephone column exists in clients
+  // Safe migrations for clients
   try {
     const columns = db.pragma('table_info(clients)') as Array<{ name: string }>;
     const hasTelephone = columns.some((c) => c.name === 'telephone');
     if (!hasTelephone) {
       db.exec('ALTER TABLE clients ADD COLUMN telephone TEXT;');
     }
+    const hasNif = columns.some((c) => c.name === 'nif');
+    if (!hasNif) {
+      db.exec('ALTER TABLE clients ADD COLUMN nif TEXT;');
+    }
+    const hasNis = columns.some((c) => c.name === 'nis');
+    if (!hasNis) {
+      db.exec('ALTER TABLE clients ADD COLUMN nis TEXT;');
+    }
+    const hasRegistre = columns.some((c) => c.name === 'registre_numero');
+    if (!hasRegistre) {
+      db.exec('ALTER TABLE clients ADD COLUMN registre_numero TEXT;');
+    }
   } catch (err) {
-    console.error('Migration error for clients.telephone:', err);
+    console.error('Migration error for clients columns:', err);
+  }
+
+  // Safe migration: check if date_expiration column exists in products
+  try {
+    const productColumns = db.pragma('table_info(products)') as Array<{ name: string }>;
+    const hasExpiration = productColumns.some((c) => c.name === 'date_expiration');
+    if (!hasExpiration) {
+      db.exec('ALTER TABLE products ADD COLUMN date_expiration TEXT;');
+    }
+  } catch (err) {
+    console.error('Migration error for products.date_expiration:', err);
   }
 }
-
-// IPC Handlers implementation will be in main.ts, but we export db instance

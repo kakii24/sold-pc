@@ -3,16 +3,18 @@ import { WholesaleView } from './WholesaleView';
 import { RetailView } from './RetailView';
 import { StockView } from './StockView';
 import { ClientsView } from './ClientsView';
+import { ChargesView } from './ChargesView';
+import { SuppliersView } from './SuppliersView';
 import { ActivationLockScreen } from './ActivationLockScreen';
 import { useAppStore } from './store';
 
 function App() {
-  const [activeView, setActiveView] = useState<'wholesale' | 'retail' | 'stock' | 'clients'>('wholesale');
+  const [activeView, setActiveView] = useState<'wholesale' | 'retail' | 'stock' | 'clients' | 'charges' | 'suppliers'>('wholesale');
   const [licenseChecking, setLicenseChecking] = useState<boolean>(true);
   const [isActivated, setIsActivated] = useState<boolean>(false);
   const [machineId, setMachineId] = useState<string>('');
 
-  const { products, clients, fetchProducts, fetchClients } = useAppStore();
+  const { products, clients, charges, suppliers, fetchProducts, fetchClients, fetchCharges, fetchSuppliers } = useAppStore();
 
   useEffect(() => {
     let mounted = true;
@@ -45,11 +47,15 @@ function App() {
     if (isActivated) {
       fetchProducts();
       fetchClients();
+      fetchCharges();
+      fetchSuppliers();
     }
-  }, [isActivated, fetchProducts, fetchClients]);
+  }, [isActivated, fetchProducts, fetchClients, fetchCharges, fetchSuppliers]);
 
   const lowStockCount = products.filter(p => p.stock_actuel <= p.seuil_alerte).length;
   const indebtedClientsCount = clients.filter(c => c.total_dette > 0).length;
+  const totalChargesCumule = charges.reduce((acc, c) => acc + (Number(c.montant) || 0), 0);
+  const totalFournisseursDette = suppliers.reduce((acc, s) => acc + (Number(s.total_dette) || 0), 0);
 
   useEffect(() => {
     if (!isActivated) return;
@@ -67,6 +73,12 @@ function App() {
       } else if (e.key === 'F4') {
         e.preventDefault();
         setActiveView('clients');
+      } else if (e.key === 'F5') {
+        e.preventDefault();
+        setActiveView('charges');
+      } else if (e.key === 'F6') {
+        e.preventDefault();
+        setActiveView('suppliers');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -167,6 +179,42 @@ function App() {
                 </span>
               )}
             </button>
+
+            <button
+              onClick={() => setActiveView('charges')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all relative cursor-pointer ${
+                activeView === 'charges'
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+            >
+              <span>💸</span>
+              <span>Les Charges</span>
+              <kbd className="text-[10px] bg-black/40 px-1 py-0.2 rounded text-gray-300 font-mono">F5</kbd>
+              {charges.length > 0 && (
+                <span className="ml-0.5 px-1.5 py-0.2 text-[9px] bg-rose-500/40 text-rose-200 border border-rose-500/60 font-mono font-bold rounded-full" title={`Total cumulé: ${totalChargesCumule.toLocaleString('fr-FR')} DA`}>
+                  {totalChargesCumule.toLocaleString('fr-FR')} DA
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveView('suppliers')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all relative cursor-pointer ${
+                activeView === 'suppliers'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+            >
+              <span>🏭</span>
+              <span>Les Fournisseurs</span>
+              <kbd className="text-[10px] bg-black/40 px-1 py-0.2 rounded text-gray-300 font-mono">F6</kbd>
+              {totalFournisseursDette > 0 && (
+                <span className="ml-0.5 px-1.5 py-0.2 text-[9px] bg-amber-500/30 text-amber-200 border border-amber-500/50 font-mono font-bold rounded-full" title={`Dette totale fournisseurs: ${totalFournisseursDette.toLocaleString('fr-FR')} DA`}>
+                  {totalFournisseursDette.toLocaleString('fr-FR')} DA
+                </span>
+              )}
+            </button>
           </nav>
         </div>
       </header>
@@ -177,6 +225,8 @@ function App() {
         {activeView === 'retail' && <RetailView />}
         {activeView === 'stock' && <StockView />}
         {activeView === 'clients' && <ClientsView />}
+        {activeView === 'charges' && <ChargesView />}
+        {activeView === 'suppliers' && <SuppliersView />}
       </main>
     </div>
   );
